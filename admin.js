@@ -7,7 +7,7 @@ const $ = s => document.querySelector(s);
 const loginPanel = $("#login-panel"), adminPanel = $("#admin-panel");
 const loginMessage = $("#login-message"), formMessage = $("#form-message");
 let db, auth, currentUser = null, matches = [], stopListening = null;
-const validConfig = firebaseConfig.apiKey !== "AIzaSyBLTLkp8MGVraRTgKQEJA58C42vRMoXUy4" && firebaseConfig.projectId !== "PASTE_PROJECT_ID";
+const validConfig = firebaseConfig.apiKey !== "AIzaSyBLTLkp8MGVraRTgKQEJA58C42vRMoXUy4" && firebaseConfig.projectId !== "campus-arena-7115e";
 
 function message(el, text, error=false) { el.textContent = text; el.classList.toggle("error", error); }
 function esc(value = "") { return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
