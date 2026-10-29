@@ -92,9 +92,15 @@ else {
       if (id) await updateDoc(doc(db, "matches", id), payload);
       else await addDoc(collection(db, "matches"), { ...payload, createdAt:serverTimestamp(), createdBy:currentUser.uid });
       resetForm(); message(formMessage, "Firebase မှာ သိမ်းဆည်းပြီးပါပြီ။ User View မှာလည်း အလိုအလျောက် ပြောင်းလဲပါမယ်။");
-    } catch (err) {
-      console.error(err);
-      message(formMessage, "သိမ်းမရပါ။ Admin UID document နဲ့ Firestore Rules ကို စစ်ပါ။", true);
-    }
+    } 
+    catch (error) {
+  console.error("Match save failed:", error);
+
+  alert(
+    "Match Save မအောင်မြင်ပါ။\n" +
+    "Error Code: " + (error.code || "unknown") +
+    "\nအသေးစိတ်: " + (error.message || error)
+  );
+}
   });
 }
