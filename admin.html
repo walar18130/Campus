@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="my">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101b35">
+  <title>Admin | Campus Arena</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><span class="brand-mark">CA</span><span>Campus Arena<small>Administrator Console</small></span></a><nav><a href="./">User View</a></nav></header>
+  <main class="container admin-container">
+    <section id="login-panel" class="login-card">
+      <p class="eyebrow">RESTRICTED ACCESS</p><h1>Admin Login</h1><p class="muted">ခွင့်ပြုထားသော Admin account ဖြင့်သာ ဝင်ရောက်နိုင်သည်။</p>
+      <form id="login-form" class="form-stack">
+        <label>Email<input id="email" type="email" autocomplete="username" required placeholder="admin@example.com"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Password" minlength="6"></label>
+        <button class="button button-primary" type="submit">Login ဝင်မယ်</button>
+        <p id="login-message" class="form-message" aria-live="polite"></p>
+      </form>
+    </section>
+    <section id="admin-panel" hidden>
+      <div class="section-head admin-heading"><div><p class="eyebrow">CONTROL PANEL</p><h1>ပွဲစဉ် စီမံခန့်ခွဲမှု</h1><p class="muted" id="signed-in-as"></p></div><button id="logout-button" class="button button-outline">Logout</button></div>
+      <div class="admin-layout">
+        <form id="match-form" class="panel form-stack">
+          <h2 id="form-title">ပွဲစဉ်အသစ် ထည့်ရန်</h2>
+          <input id="match-id" type="hidden">
+          <label>အားကစားအမျိုးအစား<select id="sport" required><option value="football">Football</option><option value="esports">Esports</option></select></label>
+          <label>Game / Tournament<input id="game-title" required maxlength="80" placeholder="ဥပမာ - Inter-class Football"></label>
+          <div class="form-row"><label>Home / Team A<input id="home-team" required maxlength="60" placeholder="Team A"></label><label>Away / Team B<input id="away-team" required maxlength="60" placeholder="Team B"></label></div>
+          <div class="form-row"><label>Team A Score<input id="home-score" type="number" min="0" max="999" step="1" placeholder="0"></label><label>Team B Score<input id="away-score" type="number" min="0" max="999" step="1" placeholder="0"></label></div>
+          <label>ပွဲစဉ်ရက် / အချိန်<input id="kickoff" type="datetime-local" required></label>
+          <label>အခြေအနေ<select id="status"><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="finished">Finished</option></select></label>
+          <div class="button-row"><button class="button button-primary" type="submit">သိမ်းမယ်</button><button class="button button-outline" id="cancel-edit" type="button">ရှင်းလင်းမယ်</button></div>
+          <p id="form-message" class="form-message" aria-live="polite"></p>
+        </form>
+        <section class="panel"><div class="section-head"><div><h2>လက်ရှိပွဲစဉ်များ</h2><p class="muted">Edit / Delete လုပ်နိုင်သည်</p></div></div><div id="admin-matches" class="admin-match-list">ဒေတာကို ဖတ်နေပါတယ်…</div></section>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
