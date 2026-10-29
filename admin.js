@@ -7,8 +7,11 @@ const $ = s => document.querySelector(s);
 const loginPanel = $("#login-panel"), adminPanel = $("#admin-panel");
 const loginMessage = $("#login-message"), formMessage = $("#form-message");
 let db, auth, currentUser = null, matches = [], stopListening = null;
-const validConfig =
-  Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+const validConfig = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId
+);
 
 function message(el, text, error=false) { el.textContent = text; el.classList.toggle("error", error); }
 function esc(value = "") { return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
