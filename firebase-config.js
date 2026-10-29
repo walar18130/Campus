@@ -1,5 +1,6 @@
 // Firebase Console > Project settings > Your apps > SDK setup and configuration
 // အောက်ပါ placeholder များကို ကိုယ့် Firebase Web App config နဲ့ အစားထိုးပါ။
+
 export const firebaseConfig = {
   apiKey: "AIzaSyBLTLkp8MGVraRTgKQEJA58C42vRMoXUy4",
   authDomain: "campus-arena-7115e.firebaseapp.com",
