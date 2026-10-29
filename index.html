@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="my">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101b35">
+  <title>Campus Arena | School Sports & Esports</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">CA</span><span>Campus Arena<small>School Sports & Esports</small></span></a>
+    <nav><a class="active" href="#matches">Matches</a><a href="#standings">Standings</a><a href="admin.html">Admin</a></nav>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div><p class="eyebrow">SCHOOL LEAGUE PORTAL</p><h1>Every match.<br><span>Every moment.</span></h1>
+      <p class="hero-copy">ကျောင်းတွင်း Football နဲ့ Esports ပွဲစဉ်ရလဒ်များကို တစ်နေရာတည်းမှာ ကြည့်ရှုနိုင်ပါတယ်။</p>
+      <a class="button button-light" href="#matches">ပွဲစဉ်များ ကြည့်ရန် ↓</a></div>
+      <div class="hero-stat"><span class="live-dot"></span><span>OFFICIAL SCHOOL RESULTS</span><strong id="match-count">—</strong><small>ပွဲစဉ်စုစုပေါင်း</small></div>
+    </section>
+    <section class="section" id="matches">
+      <div class="section-head"><div><p class="eyebrow">FIXTURES & RESULTS</p><h2>ပွဲစဉ်များ</h2></div>
+        <div class="filters"><button class="filter active" data-filter="all">အားလုံး</button><button class="filter" data-filter="football">Football</button><button class="filter" data-filter="esports">Esports</button></div>
+      </div>
+      <div id="notice" class="notice">Firebase data ကို ချိတ်ဆက်နေပါတယ်…</div>
+      <div id="matches-list" class="match-grid"></div>
+    </section>
+    <section class="section" id="standings">
+      <div class="section-head"><div><p class="eyebrow">FOOTBALL LEAGUE</p><h2>အမှတ်ပေးဇယား</h2></div><span class="muted">ပြီးဆုံးပြီး Football ပွဲများမှ အလိုအလျောက်တွက်ချက်သည်</span></div>
+      <div class="table-wrap"><table><thead><tr><th>#</th><th>အသင်း</th><th>ပွဲ</th><th>နိုင်</th><th>သရေ</th><th>ရှုံး</th><th>ဂိုးကွာ</th><th>ရမှတ်</th></tr></thead><tbody id="standings-body"><tr><td colspan="8" class="empty">ဒေတာကို ဖတ်နေပါတယ်…</td></tr></tbody></table></div>
+    </section>
+    <footer><span>© <span id="year"></span> Campus Arena</span><span>School Sports • Esports • Fair Play</span></footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
