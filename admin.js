@@ -95,9 +95,8 @@ else {
     } 
     catch (error) {
   console.error("Match save failed:", error);
-
   alert(
-    "Match Save မအောင်မြင်ပါ။\n" +
+      "Match Save မအောင်မြင်ပါ။\n" +
     "Error Code: " + (error.code || "unknown") +
     "\nအသေးစိတ်: " + (error.message || error)
   );
