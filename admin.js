@@ -284,11 +284,12 @@ async function verifyAdmin(user) {
   const adminSnapshot = await getDoc(adminRef);
 
   if (!adminSnapshot.exists()) {
-    throw new Error(
-      "Admin document မတွေ့ပါ။ admins document ID ကို Authentication UID နဲ့ စစ်ပါ။"
-    );
-  }
-
+  throw new Error(
+    "Admin document မတွေ့ပါ။ " +
+    "Project: " + firebaseConfig.projectId +
+    " | Login UID: " + user.uid
+  );
+}
   const adminData = adminSnapshot.data();
 
   if (adminData.active !== true) {
