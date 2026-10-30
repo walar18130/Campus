@@ -1,8 +1,4 @@
-
-import {
-  initializeApp,
-  getApps
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 
 import {
   getAuth,
@@ -18,95 +14,114 @@ import {
   updateDoc,
   deleteDoc,
   doc,
-  getDoc,
+  getDocFromServer,
   onSnapshot,
   query,
   orderBy,
-  serverTimestamp,
-  Timestamp
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 import { firebaseConfig } from "./firebase-config.js";
 
-// ==================================================
-// CAMPUS ARENA ADMIN DASHBOARD
-// ==================================================
-
-const $ = (selector) => document.querySelector(selector);
+const $ = selector => document.querySelector(selector);
 
 const loginPanel = $("#login-panel");
 const adminPanel = $("#admin-panel");
 const loginForm = $("#login-form");
 const loginMessage = $("#login-message");
 const formMessage = $("#form-message");
-const matchForm = $("#match-form");
 const adminMatches = $("#admin-matches");
+const matchForm = $("#match-form");
 
-let app;
-let auth;
-let db;
-let currentUser = null;
-let matches = [];
-let stopListening = null;
-let authGeneration = 0;
-let saving = false;
-
-function message(element, text, error = false) {
+function message(element, text, isError = false) {
   if (!element) return;
-
-  element.textContent = text;
-  element.classList.toggle("error", error);
-}
-
-function esc(value = "") {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[character]);
-}
-
-function validConfig(config) {
-  return Boolean(
-    config &&
-    typeof config.apiKey === "string" &&
-    config.apiKey.trim() &&
-    typeof config.projectId === "string" &&
-    config.projectId.trim() &&
-    typeof config.appId === "string" &&
-    config.appId.trim()
-  );
+  element.textContent = text || "";
+  element.classList.toggle("error", Boolean(isError));
 }
 
 function errorDetails(error) {
-  const code = error?.code || "unknown";
-  const details = error?.message || String(error);
-
-  console.error("Campus Arena Firebase error:", error);
-
-  return `${code}: ${details}`;
+  return `${error?.code || "unknown"}: ${error?.message || String(error)}`;
 }
 
-function stopMatchListener() {
-  if (stopListening) {
-    stopListening();
-    stopListening = null;
-  }
+function validConfig(config) {
+  return ["apiKey", "authDomain", "projectId", "appId"].every(key =>
+    typeof config?.[key] === "string" &&
+    config[key].trim() !== "" &&
+    !/your_|replace_me|placeholder/i.test(config[key])
+  );
 }
+
+if (!validConfig(firebaseConfig)) {
+  message(
+    loginMessage,
+    "firebase-config.js ထဲမှာ Firebase config အပြည့်အစုံ ထည့်ပါ။",
+    true
+  );
+  throw new Error("Firebase configuration is missing.");
+}
+
+const APP_NAME = "CampusArenaAdmin";
+
+const existingApp = getApps().find(
+  item => item.name === APP_NAME
+);
+
+const app = existingApp || initializeApp(firebaseConfig, APP_NAME);
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+console.info("Firebase Project:", app.options.projectId);
+
+let currentUser = null;
+let matches = [];
+let unsubscribeMatches = null;
+let authGeneration = 0;
 
 function setLoggedInUI(user) {
   if (loginPanel) loginPanel.hidden = Boolean(user);
   if (adminPanel) adminPanel.hidden = !user;
 
-  const signedIn = $("#signed-in-as");
+  const signedInAs = $("#signed-in-as");
 
-  if (signedIn) {
-    signedIn.textContent = user
+  if (signedInAs) {
+    signedInAs.textContent = user
       ? `Signed in: ${user.email || "Admin"}`
       : "";
   }
+}
+
+function stopMatchListener() {
+  if (unsubscribeMatches) {
+    unsubscribeMatches();
+    unsubscribeMatches = null;
+  }
+}
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+}
+
+function toInputDate(value) {
+  if (!value) return "";
+
+  const date = value.toDate
+    ? value.toDate()
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const local = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60000
+  );
+
+  return local.toISOString().slice(0, 16);
 }
 
 function resetForm() {
@@ -114,125 +129,128 @@ function resetForm() {
 
   matchForm.reset();
 
-  const id = $("#match-id");
-  const title = $("#form-title");
-  const homeScore = $("#home-score");
-  const awayScore = $("#away-score");
+  if ($("#match-id")) $("#match-id").value = "";
+  if ($("#form-title")) {
+    $("#form-title").textContent = "ပွဲစဉ်အသစ် ထည့်ရန်";
+  }
 
-  if (id) id.value = "";
-  if (title) title.textContent = "ပွဲစဉ်အသစ် ထည့်ရန်";
-  if (homeScore) homeScore.value = "";
-  if (awayScore) awayScore.value = "";
+  if ($("#home-score")) $("#home-score").value = "";
+  if ($("#away-score")) $("#away-score").value = "";
 
   message(formMessage, "");
 }
 
-function toInputDate(value) {
-  if (!value) return "";
-
-  let date;
-
-  if (typeof value.toDate === "function") {
-    date = value.toDate();
-  } else if (value instanceof Date) {
-    date = value;
-  } else {
-    date = new Date(value);
+// Admin verification
+async function verifyAdmin(user) {
+  if (!user) {
+    throw new Error("User is not authenticated.");
   }
 
-  if (Number.isNaN(date.getTime())) return "";
+  const projectId = firebaseConfig.projectId;
 
-  const localDate = new Date(
-    date.getTime() - date.getTimezoneOffset() * 60000
-  );
+  if (
+    auth.app.options.projectId !== projectId ||
+    db.app.options.projectId !== projectId
+  ) {
+    throw new Error("Firebase Project ID မကိုက်ညီပါ။");
+  }
 
-  return localDate.toISOString().slice(0, 16);
+  await user.getIdToken(true);
+
+  const adminRef = doc(db, "admins", user.uid);
+
+  console.info("Admin UID:", user.uid);
+  console.info("Admin document:", adminRef.path);
+  console.info("Project:", projectId);
+
+  const snapshot = await getDocFromServer(adminRef);
+
+  if (!snapshot.exists()) {
+    throw new Error(
+      `Admin document မတွေ့ပါ။ UID=${user.uid}, Project=${projectId}`
+    );
+  }
+
+  const data = snapshot.data();
+
+  if (data.active !== true) {
+    throw new Error(
+      "Admin active field သည် Boolean true မဟုတ်ပါ။"
+    );
+  }
+
+  return true;
 }
 
-function getMatchDate(value) {
-  if (!value) return null;
-
-  const date = value instanceof Date
-    ? value
-    : new Date(value);
-
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date;
-}
-
+// Render matches
 function renderAdminMatches() {
   if (!adminMatches) return;
 
   if (!matches.length) {
     adminMatches.innerHTML =
-      '<p class="muted">ပွဲစဉ်မရှိသေးပါ။ ဘယ်ဘက် Form ကနေ ထည့်နိုင်ပါတယ်။</p>';
+      '<p class="muted">ပွဲစဉ်မရှိသေးပါ။</p>';
     return;
   }
 
-  adminMatches.innerHTML = matches.map((match) => {
-    const isFootball = match.sport === "football";
-    const homeScore = match.homeScore ?? "–";
-    const awayScore = match.awayScore ?? "–";
+  adminMatches.innerHTML = matches.map(m => `
+    <article class="admin-match">
+      <div>
+        <span class="tag ${
+          m.sport === "football"
+            ? "tag-football"
+            : "tag-esports"
+        }">
+          ${m.sport === "football" ? "FOOTBALL" : "ESPORTS"}
+        </span>
 
-    return `
-      <article class="admin-match">
-        <div>
-          <span class="tag ${isFootball ? "tag-football" : "tag-esports"}">
-            ${isFootball ? "FOOTBALL" : "ESPORTS"}
-          </span>
+        <strong>
+          ${escapeHTML(m.homeTeam)} ${m.homeScore ?? "–"}
+          :
+          ${m.awayScore ?? "–"} ${escapeHTML(m.awayTeam)}
+        </strong>
 
-          <strong>
-            ${esc(match.homeTeam)} ${homeScore} : ${awayScore}
-            ${esc(match.awayTeam)}
-          </strong>
+        <small>
+          ${escapeHTML(m.title)} • ${escapeHTML(m.status)}
+        </small>
+      </div>
 
-          <small>
-            ${esc(match.title)} • ${esc(match.status)}
-          </small>
-        </div>
+      <div class="button-row">
+        <button
+          type="button"
+          class="button button-small button-outline"
+          data-edit="${m.id}"
+        >Edit</button>
 
-        <div class="button-row">
-          <button
-            type="button"
-            class="button button-small button-outline"
-            data-edit="${esc(match.id)}"
-          >Edit</button>
+        <button
+          type="button"
+          class="button button-small button-danger"
+          data-delete="${m.id}"
+        >Delete</button>
+      </div>
+    </article>
+  `).join("");
 
-          <button
-            type="button"
-            class="button button-small button-danger"
-            data-delete="${esc(match.id)}"
-          >Delete</button>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  adminMatches.querySelectorAll("[data-edit]").forEach((button) => {
+  adminMatches.querySelectorAll("[data-edit]").forEach(button => {
     button.addEventListener("click", () => {
-      const match = matches.find(
-        (item) => item.id === button.dataset.edit
+      const m = matches.find(
+        item => item.id === button.dataset.edit
       );
 
-      if (!match) return;
+      if (!m) return;
 
-      $("#match-id").value = match.id;
-      $("#sport").value = match.sport || "football";
-      $("#game-title").value = match.title || "";
-      $("#home-team").value = match.homeTeam || "";
-      $("#away-team").value = match.awayTeam || "";
-      $("#home-score").value = match.homeScore ?? "";
-      $("#away-score").value = match.awayScore ?? "";
-      $("#kickoff").value = toInputDate(match.kickoff);
-      $("#status").value = match.status || "scheduled";
+      $("#match-id").value = m.id;
+      $("#sport").value = m.sport || "football";
+      $("#game-title").value = m.title || "";
+      $("#home-team").value = m.homeTeam || "";
+      $("#away-team").value = m.awayTeam || "";
+      $("#home-score").value = m.homeScore ?? "";
+      $("#away-score").value = m.awayScore ?? "";
+      $("#kickoff").value = toInputDate(m.kickoff);
+      $("#status").value = m.status || "scheduled";
 
       $("#form-title").textContent = "ပွဲစဉ် ပြင်ဆင်ရန်";
 
-      message(
-        formMessage,
-        "အချက်အလက်ပြင်ပြီး သိမ်းမယ်ကို နှိပ်ပါ။"
-      );
+      message(formMessage, "ပြင်ဆင်ပြီး သိမ်းမယ်ကို နှိပ်ပါ။");
 
       window.scrollTo({
         top: 0,
@@ -241,359 +259,207 @@ function renderAdminMatches() {
     });
   });
 
-  adminMatches.querySelectorAll("[data-delete]").forEach((button) => {
+  adminMatches.querySelectorAll("[data-delete]").forEach(button => {
     button.addEventListener("click", async () => {
-      const match = matches.find(
-        (item) => item.id === button.dataset.delete
+      const m = matches.find(
+        item => item.id === button.dataset.delete
       );
 
-      if (!match || !currentUser) return;
+      if (!m || !currentUser) return;
 
-      const confirmed = window.confirm(
-        `${match.homeTeam} vs ${match.awayTeam} ပွဲစဉ်ကို ဖျက်မှာ သေချာပါသလား?`
-      );
-
-      if (!confirmed) return;
-
-      button.disabled = true;
+      if (!confirm(
+        `${m.homeTeam} vs ${m.awayTeam} ကို ဖျက်မှာ သေချာပါသလား?`
+      )) return;
 
       try {
-        await deleteDoc(doc(db, "matches", match.id));
-
+        await deleteDoc(doc(db, "matches", m.id));
         message(formMessage, "ပွဲစဉ် ဖျက်ပြီးပါပြီ။");
       } catch (error) {
+        console.error(error);
         message(
           formMessage,
-          "ပွဲစဉ်ဖျက်မရပါ။ " + errorDetails(error),
+          "ဖျက်မရပါ။ " + errorDetails(error),
           true
         );
-      } finally {
-        button.disabled = false;
       }
     });
   });
 }
 
-// ==================================================
-// VERIFY ADMIN DOCUMENT
-// ==================================================
-
-async function verifyAdmin(user) {
-  const uid = user.uid;
-  const projectId = db.app.options.projectId;
-
-  const adminRef = doc(db, "admins", uid);
-
-  console.log("========== ADMIN CHECK ==========");
-  console.log("Project:", projectId);
-  console.log("App Name:", db.app.name);
-  console.log("UID:", uid);
-  console.log("Document Path:", adminRef.path);
-
-  try {
-    // Force a fresh read from Firestore server
-    const snapshot = await getDocFromServer(adminRef);
-
-    console.log("Document Exists:", snapshot.exists());
-
-    if (!snapshot.exists()) {
-      throw new Error(
-        "Admin document not found. " +
-        "Path: " + adminRef.path
-      );
-    }
-
-    const data = snapshot.data();
-
-    console.log("Admin Data:", data);
-
-    if (data.active !== true) {
-      throw new Error(
-        "Admin active field must be Boolean true."
-      );
-    }
-
-    console.log("ADMIN VERIFICATION SUCCESS");
-
-    return true;
-
-  } catch (error) {
-    console.error("ADMIN CHECK FAILED:", error);
-
-    throw error;
-  }
-}
-
-// ==================================================
-// LISTEN TO MATCHES
-// ==================================================
-
+// Real-time listener
 function listenToMatches(user) {
   stopMatchListener();
 
-  const matchesQuery = query(
+  if (!user || currentUser?.uid !== user.uid) return;
+
+  const q = query(
     collection(db, "matches"),
     orderBy("kickoff", "asc")
   );
 
-  stopListening = onSnapshot(
-    matchesQuery,
-    (snapshot) => {
-      matches = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data()
-      }));
+  unsubscribeMatches = onSnapshot(q, snapshot => {
+    matches = snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
 
-      renderAdminMatches();
-    },
-    (error) => {
-      message(
-        formMessage,
-        "Match data ဖတ်မရပါ။ " + errorDetails(error),
-        true
-      );
+    renderAdminMatches();
+  }, error => {
+    console.error("Match listener:", error);
 
-      if (adminMatches) {
-        adminMatches.textContent =
-          "Match data ဖတ်ခွင့်မရှိပါ သို့မဟုတ် query မှာ ပြဿနာရှိပါတယ်။";
-      }
-    }
-  );
-}
-
-// ==================================================
-// INITIALIZE FIREBASE
-// ==================================================
-const APP_NAME = "CampusArenaAdmin";
-
-const existingApp = getApps().find(
-  app => app.name === APP_NAME
-);
-
-app = existingApp || initializeApp(
-  firebaseConfig,
-  APP_NAME
-);
-
-auth = getAuth(app);
-db = getFirestore(app);
-
-console.log("Admin App:", app.name);
-console.log("Admin Project:", app.options.projectId);
-
-if (!loginPanel || !adminPanel || !loginForm || !matchForm) {
-  console.error(
-    "Campus Arena HTML ထဲမှာ လိုအပ်တဲ့ element ID တချို့ မတွေ့ပါ။"
-  );
-} else if (!validConfig(firebaseConfig)) {
-  message(
-    loginMessage,
-    "firebase-config.js ထဲက apiKey, projectId, appId ကို စစ်ပါ။",
-    true
-  );
-} else {
-  try {
-    app = getApps().length
-      ? getApp()
-      : initializeApp(firebaseConfig);
-
-    auth = getAuth(app);
-    db = getFirestore(app);
-
-    console.log("Campus Arena project:", firebaseConfig.projectId);
-  } catch (error) {
     message(
-      loginMessage,
-      "Firebase စတင်ဖွင့်မရပါ။ " + errorDetails(error),
+      formMessage,
+      "Match data ဖတ်မရပါ။ " + errorDetails(error),
       true
     );
-  }
+  });
 }
 
-// ==================================================
-// LOGIN
-// ==================================================
-
-if (auth && db) {
-  loginForm.addEventListener("submit", async (event) => {
+// Login
+if (loginForm) {
+  loginForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const email = $("#email")?.value.trim();
-    const password = $("#password")?.value;
+    const email = $("#email").value.trim();
+    const password = $("#password").value;
 
     if (!email || !password) {
       message(loginMessage, "Email နဲ့ Password ဖြည့်ပါ။", true);
       return;
     }
 
-    const submitButton = loginForm.querySelector(
-      'button[type="submit"], button:not([type])'
-    );
-
-    if (submitButton) submitButton.disabled = true;
-
     message(loginMessage, "Login စစ်ဆေးနေပါတယ်…");
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
+      console.error(error);
+
       message(
         loginMessage,
         "Login မအောင်မြင်ပါ။ " + errorDetails(error),
         true
       );
-    } finally {
-      if (submitButton) submitButton.disabled = false;
     }
   });
+}
 
-  // ==================================================
-  // AUTH STATE + ADMIN CHECK
-  // ==================================================
+// Authentication state
+onAuthStateChanged(auth, async user => {
+  const generation = ++authGeneration;
 
-  onAuthStateChanged(auth, async (user) => {
-    const generation = ++authGeneration;
+  currentUser = user;
+  stopMatchListener();
+  matches = [];
 
-    currentUser = user;
-    stopMatchListener();
-    matches = [];
+  if (!user) {
+    setLoggedInUI(null);
 
-    if (!user) {
-      setLoggedInUI(null);
-      if (adminMatches) adminMatches.innerHTML = "";
-      message(loginMessage, "");
-      return;
-    }
+    if (adminMatches) adminMatches.innerHTML = "";
+
+    message(loginMessage, "");
+    message(formMessage, "");
+
+    return;
+  }
+
+  if (loginPanel) loginPanel.hidden = false;
+  if (adminPanel) adminPanel.hidden = true;
+
+  message(
+    loginMessage,
+    "Login အောင်မြင်ပါပြီ။ Admin စစ်ဆေးနေပါတယ်…"
+  );
+
+  try {
+    await verifyAdmin(user);
+
+    if (generation !== authGeneration) return;
+
+    if (auth.currentUser?.uid !== user.uid) return;
 
     setLoggedInUI(user);
 
     message(
       formMessage,
-      `Admin စစ်ဆေးနေပါတယ်… Project: ${firebaseConfig.projectId}`
+      "Admin document အတည်ပြုပြီးပါပြီ။"
     );
 
-    console.info("Signed-in email:", user.email);
-    console.info("Signed-in UID:", user.uid);
-    console.info("Firebase project:", firebaseConfig.projectId);
+    listenToMatches(user);
 
-    try {
-      await verifyAdmin(user);
+  } catch (error) {
+    if (generation !== authGeneration) return;
 
-      if (generation !== authGeneration) return;
+    console.error("Admin verification:", error);
 
-      message(
-        formMessage,
-        "Admin document OK ဖြစ်ပါတယ်။ Match data ကို ဖတ်နေပါတယ်။"
-      );
+    setLoggedInUI(null);
 
-      listenToMatches(user);
-    } catch (error) {
-      if (generation !== authGeneration) return;
+    message(
+      loginMessage,
+      "Admin စစ်ဆေးမှု မအောင်မြင်ပါ။ " +
+      errorDetails(error),
+      true
+    );
 
-      message(
-        formMessage,
-        "Admin စစ်ဆေးမှု မအောင်မြင်ပါ။ " + errorDetails(error),
-        true
-      );
-
-      if (adminMatches) {
-        adminMatches.textContent =
-          "Admin ခွင့်ပြုချက်ကို အတည်မပြုနိုင်ပါ။";
-      }
+    if (adminMatches) {
+      adminMatches.textContent =
+        "Admin ခွင့်ပြုချက်ကို အတည်မပြုနိုင်ပါ။";
     }
-  });
+  }
+});
 
-  // ==================================================
-  // LOGOUT
-  // ==================================================
-
-  $("#logout-button")?.addEventListener("click", async () => {
-    try {
-      await signOut(auth);
-      resetForm();
-    } catch (error) {
-      message(
-        formMessage,
-        "Logout မအောင်မြင်ပါ။ " + errorDetails(error),
-        true
-      );
-    }
-  });
-
-  // ==================================================
-  // CANCEL EDIT
-  // ==================================================
-
-  $("#cancel-edit")?.addEventListener("click", resetForm);
-
-  // ==================================================
-  // CREATE / UPDATE MATCH
-  // ==================================================
-
-  matchForm.addEventListener("submit", async (event) => {
+// Save match
+if (matchForm) {
+  matchForm.addEventListener("submit", async event => {
     event.preventDefault();
-
-    if (saving) return;
 
     if (!currentUser) {
       message(formMessage, "အရင် Login ဝင်ပါ။", true);
       return;
     }
 
-    const sport = $("#sport")?.value;
-    const title = $("#game-title")?.value.trim();
-    const homeTeam = $("#home-team")?.value.trim();
-    const awayTeam = $("#away-team")?.value.trim();
-    const kickoffValue = $("#kickoff")?.value;
-    const status = $("#status")?.value;
+    const sport = $("#sport").value;
+    const title = $("#game-title").value.trim();
+    const homeTeam = $("#home-team").value.trim();
+    const awayTeam = $("#away-team").value.trim();
+    const kickoffValue = $("#kickoff").value;
+    const status = $("#status").value;
 
-    const homeScoreText = $("#home-score")?.value ?? "";
-    const awayScoreText = $("#away-score")?.value ?? "";
+    const hsText = $("#home-score").value;
+    const asText = $("#away-score").value;
 
-    if (!["football", "esports"].includes(sport)) {
-      message(formMessage, "Football သို့မဟုတ် Esports ကို ရွေးပါ။", true);
+    const kickoffDate = new Date(kickoffValue);
+
+    const homeScore =
+      hsText === "" ? null : Number(hsText);
+
+    const awayScore =
+      asText === "" ? null : Number(asText);
+
+    if (
+      !title ||
+      !homeTeam ||
+      !awayTeam ||
+      !kickoffValue ||
+      Number.isNaN(kickoffDate.getTime())
+    ) {
+      message(formMessage, "လိုအပ်သောအချက်အလက်များ ဖြည့်ပါ။", true);
       return;
     }
 
-    if (!title || !homeTeam || !awayTeam || !kickoffValue) {
-      message(formMessage, "လိုအပ်သောအချက်အလက်အားလုံး ဖြည့်ပါ။", true);
+    if ((hsText === "") !== (asText === "")) {
+      message(formMessage, "Score နှစ်ဖက်လုံး ဖြည့်ပါ။", true);
       return;
     }
 
-    if (!["scheduled", "live", "finished"].includes(status)) {
-      message(formMessage, "ပွဲစဉ်အခြေအနေကို မှန်ကန်စွာ ရွေးပါ။", true);
+    if (
+      (homeScore !== null &&
+        (!Number.isInteger(homeScore) || homeScore < 0)) ||
+      (awayScore !== null &&
+        (!Number.isInteger(awayScore) || awayScore < 0))
+    ) {
+      message(formMessage, "Score မှန်ကန်စွာ ဖြည့်ပါ။", true);
       return;
-    }
-
-    if ((homeScoreText === "") !== (awayScoreText === "")) {
-      message(
-        formMessage,
-        "Score နှစ်ဖက်လုံး ထည့်ပါ၊ သို့မဟုတ် နှစ်ဖက်လုံး အလွတ်ထားပါ။",
-        true
-      );
-      return;
-    }
-
-    let homeScore = null;
-    let awayScore = null;
-
-    if (homeScoreText !== "" && awayScoreText !== "") {
-      homeScore = Number(homeScoreText);
-      awayScore = Number(awayScoreText);
-
-      if (
-        !Number.isInteger(homeScore) ||
-        !Number.isInteger(awayScore) ||
-        homeScore < 0 ||
-        awayScore < 0
-      ) {
-        message(
-          formMessage,
-          "Score ကို အနုတ်မဟုတ်တဲ့ ကိန်းပြည့်အဖြစ် ထည့်ပါ။",
-          true
-        );
-        return;
-      }
     }
 
     if (
@@ -602,16 +468,9 @@ if (auth && db) {
     ) {
       message(
         formMessage,
-        "ပြီးဆုံးတဲ့ပွဲအတွက် Score နှစ်ဖက်လုံး လိုအပ်ပါတယ်။",
+        "ပြီးဆုံးသောပွဲအတွက် Score နှစ်ဖက်လုံး လိုအပ်ပါတယ်။",
         true
       );
-      return;
-    }
-
-    const kickoffDate = getMatchDate(kickoffValue);
-
-    if (!kickoffDate) {
-      message(formMessage, "ပွဲစဉ်နေ့ရက် မမှန်ပါ။", true);
       return;
     }
 
@@ -622,63 +481,73 @@ if (auth && db) {
       awayTeam,
       homeScore,
       awayScore,
-      kickoff: Timestamp.fromDate(kickoffDate),
+      kickoff: kickoffDate,
       status,
       updatedAt: serverTimestamp(),
       updatedBy: currentUser.uid
     };
 
-    const matchId = $("#match-id")?.value;
-
-    saving = true;
-
     const submitButton = matchForm.querySelector(
-      'button[type="submit"], button:not([type])'
+      'button[type="submit"], input[type="submit"]'
     );
 
     if (submitButton) submitButton.disabled = true;
 
-    message(formMessage, "Firebase မှာ သိမ်းဆည်းနေပါတယ်…");
+    message(formMessage, "သိမ်းဆည်းနေပါတယ်…");
 
     try {
-      // Re-check current signed-in user before writing.
-      const user = auth.currentUser;
+      const id = $("#match-id").value.trim();
 
-      if (!user || user.uid !== currentUser.uid) {
-        throw new Error("Login session ပြောင်းလဲသွားပါတယ်။ ပြန်ဝင်ပါ။");
-      }
-
-      if (matchId) {
-        await updateDoc(doc(db, "matches", matchId), payload);
+      if (id) {
+        await updateDoc(
+          doc(db, "matches", id),
+          payload
+        );
       } else {
-        await addDoc(collection(db, "matches"), {
-          ...payload,
-          createdAt: serverTimestamp(),
-          createdBy: user.uid
-        });
+        await addDoc(
+          collection(db, "matches"),
+          {
+            ...payload,
+            createdAt: serverTimestamp(),
+            createdBy: currentUser.uid
+          }
+        );
       }
 
       resetForm();
 
       message(
         formMessage,
-        "Firebase မှာ သိမ်းဆည်းပြီးပါပြီ။ User View မှာလည်း ပြောင်းလဲပါမယ်။"
+        "Firebase မှာ သိမ်းဆည်းပြီးပါပြီ။"
       );
+
     } catch (error) {
+      console.error("Match save failed:", error);
+
       message(
         formMessage,
-        "Match Save မအောင်မြင်ပါ။ " + errorDetails(error),
+        "Save မအောင်မြင်ပါ။ " + errorDetails(error),
         true
       );
 
-      alert(
-        "Match Save မအောင်မြင်ပါ။\n\n" +
-        "Error: " + (error.code || "unknown") +
-        "\nအသေးစိတ်: " + (error.message || String(error))
-      );
     } finally {
-      saving = false;
       if (submitButton) submitButton.disabled = false;
     }
   });
 }
+
+// Logout
+$("#logout-button")?.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    resetForm();
+  } catch (error) {
+    message(
+      formMessage,
+      "Logout မအောင်မြင်ပါ။ " + errorDetails(error),
+      true
+    );
+  }
+});
+
+$("#cancel-edit")?.addEventListener("click", resetForm);
