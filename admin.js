@@ -279,40 +279,49 @@ function renderAdminMatches() {
 // ==================================================
 
 async function verifyAdmin(user) {
-  console.log("========== CAMPUS ARENA CHECK ==========");
+  const uid = user.uid;
+  const projectId = db.app.options.projectId;
 
-  console.log("AUTH PROJECT:", auth.app.options.projectId);
-  console.log("FIRESTORE PROJECT:", db.app.options.projectId);
-  console.log("CONFIG PROJECT:", firebaseConfig.projectId);
+  const adminRef = doc(db, "admins", uid);
 
-  console.log("LOGIN UID:", user.uid);
-  console.log("DATABASE ID:", db._databaseId?.database);
+  console.log("========== ADMIN CHECK ==========");
+  console.log("Project:", projectId);
+  console.log("App Name:", db.app.name);
+  console.log("UID:", uid);
+  console.log("Document Path:", adminRef.path);
 
-  const adminRef = doc(db, "admins", user.uid);
+  try {
+    // Force a fresh read from Firestore server
+    const snapshot = await getDocFromServer(adminRef);
 
-  console.log("DOCUMENT PATH:", adminRef.path);
+    console.log("Document Exists:", snapshot.exists());
 
-  const snapshot = await getDoc(adminRef);
+    if (!snapshot.exists()) {
+      throw new Error(
+        "Admin document not found. " +
+        "Path: " + adminRef.path
+      );
+    }
 
-  console.log("DOCUMENT EXISTS:", snapshot.exists());
+    const data = snapshot.data();
 
-  if (!snapshot.exists()) {
-    throw new Error(
-      "Admin document not found at: " + adminRef.path
-    );
+    console.log("Admin Data:", data);
+
+    if (data.active !== true) {
+      throw new Error(
+        "Admin active field must be Boolean true."
+      );
+    }
+
+    console.log("ADMIN VERIFICATION SUCCESS");
+
+    return true;
+
+  } catch (error) {
+    console.error("ADMIN CHECK FAILED:", error);
+
+    throw error;
   }
-
-  const data = snapshot.data();
-
-  console.log("ADMIN DATA:", data);
-
-  if (data.active !== true) {
-    throw new Error("Admin active is not Boolean true");
-  }
-
-  console.log("ADMIN VERIFICATION SUCCESS");
-
-  return true;
 }
 
 // ==================================================
@@ -355,6 +364,22 @@ function listenToMatches(user) {
 // ==================================================
 // INITIALIZE FIREBASE
 // ==================================================
+const APP_NAME = "CampusArenaAdmin";
+
+const existingApp = getApps().find(
+  app => app.name === APP_NAME
+);
+
+app = existingApp || initializeApp(
+  firebaseConfig,
+  APP_NAME
+);
+
+auth = getAuth(app);
+db = getFirestore(app);
+
+console.log("Admin App:", app.name);
+console.log("Admin Project:", app.options.projectId);
 
 if (!loginPanel || !adminPanel || !loginForm || !matchForm) {
   console.error(
