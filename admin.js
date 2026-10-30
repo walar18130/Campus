@@ -279,37 +279,41 @@ function renderAdminMatches() {
 // ==================================================
 
 async function verifyAdmin(user) {
+  console.log("AUTH PROJECT:", auth.app.options.projectId);
+  console.log("FIRESTORE PROJECT:", db.app.options.projectId);
+  console.log("CONFIG PROJECT:", firebaseConfig.projectId);
+  console.log("LOGIN UID:", user.uid);
+
+  if (
+    auth.app.options.projectId !==
+    db.app.options.projectId
+  ) {
+    throw new Error("Auth and Firestore project mismatch");
+  }
 
   const adminRef = doc(db, "admins", user.uid);
 
-  const adminSnapshot = await getDoc(adminRef);
+  console.log("ADMIN PATH:", adminRef.path);
 
-  console.log("Project:", app.options.projectId);
+  try {
+    const snapshot = await getDoc(adminRef);
 
-  console.log("Login UID:", user.uid);
+    if (!snapshot.exists()) {
+      throw new Error("Admin document does not exist");
+    }
 
-  console.log("Admin document path:", adminRef.path);
+    if (snapshot.data().active !== true) {
+      throw new Error("Admin active must be Boolean true");
+    }
 
-  console.log("Document exists:", adminSnapshot.exists());
+    console.log("ADMIN VERIFICATION SUCCESS");
 
-  if (!adminSnapshot.exists()) {
+    return true;
 
-    throw new Error(
-
-      `Document not found: ${adminRef.path}`
-
-    );
-
+  } catch (error) {
+    console.error("ADMIN VERIFICATION ERROR:", error);
+    throw error;
   }
-
-  if (adminSnapshot.data().active !== true) {
-
-    throw new Error("Admin active field is not Boolean true.");
-
-  }
-
-  return true;
-
 }
 
 // ==================================================
