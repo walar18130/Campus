@@ -1,7 +1,6 @@
 
 import {
   initializeApp,
-  getApp,
   getApps
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 
@@ -280,25 +279,37 @@ function renderAdminMatches() {
 // ==================================================
 
 async function verifyAdmin(user) {
+
   const adminRef = doc(db, "admins", user.uid);
+
   const adminSnapshot = await getDoc(adminRef);
 
-  if (!adminSnapshot.exists()) {
-  throw new Error(
-    "Admin document မတွေ့ပါ။ " +
-    "Project: " + firebaseConfig.projectId +
-    " | Login UID: " + user.uid
-  );
-}
-  const adminData = adminSnapshot.data();
+  console.log("Project:", app.options.projectId);
 
-  if (adminData.active !== true) {
+  console.log("Login UID:", user.uid);
+
+  console.log("Admin document path:", adminRef.path);
+
+  console.log("Document exists:", adminSnapshot.exists());
+
+  if (!adminSnapshot.exists()) {
+
     throw new Error(
-      "admins document ရဲ့ active field သည် Boolean true မဟုတ်ပါ။"
+
+      `Document not found: ${adminRef.path}`
+
     );
+
+  }
+
+  if (adminSnapshot.data().active !== true) {
+
+    throw new Error("Admin active field is not Boolean true.");
+
   }
 
   return true;
+
 }
 
 // ==================================================
